@@ -1,0 +1,75 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: fashionretro_postgres
+    environment:
+      POSTGRES_DB: fashionretro_db
+      POSTGRES_USER: nivin
+      POSTGRES_PASSWORD: 20NiViN25
+      TZ: Europe/Kyiv
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U nivin -d fashionretro_db" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  frankenphp:
+    build:
+      context: .
+      dockerfile: docker/frankenphp/Dockerfile
+    container_name: fashionretro_franken
+    environment:
+      SERVER_NAME: ":80"
+      TZ: "Europe/Kyiv"
+      FRANKENPHP_WORKER_MODE: "0"
+    ports:
+      - "81:80"
+    volumes:
+      - .:/var/www/html
+      - ../nws-core:/var/www/html/nws-core
+      - ./storage/sessions:/var/www/html/storage/sessions
+      - ./docker/frankenphp/sessions.ini:/usr/local/etc/php/conf.d/zz-sessions.ini:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  tailwind:
+    image: node:lts-slim
+    container_name: fashionretro_tailwind
+    volumes:
+      - .:/app
+      - /app/node_modules
+    working_dir: /app
+    tty: true
+    stdin_open: true
+    command: >
+      sh -c "npm install && npm run dev -- --watch --poll"
+    networks:
+      - app-network
+
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    container_name: fashionretro_cloudbeaver
+    ports:
+      - "8979:8978"
+    volumes:
+      - ./cloudbeaver_data:/opt/cloudbeaver/workspace
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
