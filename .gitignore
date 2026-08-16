@@ -1,0 +1,6 @@
+/vendor/
+/node_modules/
+/storage/sessions/*
+/cloudbeaver_data/
+/.env
+*.log
