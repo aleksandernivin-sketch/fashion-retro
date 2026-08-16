@@ -1,0 +1,3 @@
+[submodule "nws-core"]
+	path = nws-core
+	url = git@github.com:aleksandernivin-sketch/nws-core.git
