@@ -1,0 +1,91 @@
+<?php
+
+declare(strict_types=1);
+/**
+ * app\includes\generate_img.php
+ *
+ * Генерирует оптимизированный HTML-код для элемента <picture> с поддержкой AVIF, WebP и JPG/PNG.
+ * Эта версия функции упрощена для работы с одним основным изображением,
+ * которое передается в массиве $article_data.
+ *
+ * @param array $article_data Массив данных статьи, содержащий пути к изображениям.
+ * @param array $options Дополнительные параметры:
+ * - 'is_main_image' (bool): true, если изображение является главным на странице статьи. По умолчанию false.
+ * - 'is_lcp' (bool): true, если изображение является самым крупным элементом на странице. По умолчанию false.
+ * - 'link_url' (string|null): URL-адрес для ссылки, если изображение должно быть обернуто в <a>. По умолчанию null.
+ * @return string Готовый HTML-код.
+ */
+function generateOptimizedImageHtml(
+    array $article_data,
+    array $options = [],
+): string {
+    $is_main_image = $options["is_main_image"] ?? false;
+    $is_lcp = $options["is_lcp"] ?? false;
+    $link_url = $options["link_url"] ?? null;
+
+    // Получаем базовый путь из БД (например: /img/posts/my-foto.jpg)
+    $db_path =
+        $article_data["img_jpg"] ?? ($article_data["main_image_src"] ?? "");
+    if (empty($db_path)) {
+        return "";
+    }
+
+    $path_info = pathinfo($db_path);
+    $dir = $path_info["dirname"];
+    $name = $path_info["filename"];
+
+    // Размеры контейнера для PageSpeed
+    if ($is_main_image || $is_lcp) {
+        $sizes_attr = "(max-width: 650px) 100vw, 650px";
+        $loading = "eager";
+        $priority = "high";
+        $def_w = 650;
+        $def_h = 650;
+    } else {
+        $sizes_attr = "(max-width: 650px) 100vw, 350px";
+        $loading = "lazy";
+        $priority = "auto";
+        $def_w = 350;
+        $def_h = 350;
+    }
+
+    // ВАЖНО: Тут мы объясняем браузеру, какой файл какой ширины.
+    // Для 1080 берем чистое имя БЕЗ суффикса -w, но в конце ДОБАВЛЯЕМ 1080w
+    $buildSrcset = function ($ext) use ($dir, $name) {
+        return "{$dir}/{$name}-350w.{$ext} 350w,
+                 {$dir}/{$name}-650w.{$ext} 650w,
+                 {$dir}/{$name}-700w.{$ext} 700w,
+                 {$dir}/{$name}.{$ext} 1080w";
+    };
+
+    $avif_srcset = $buildSrcset("avif");
+    $webp_srcset = $buildSrcset("webp");
+    $jpg_srcset = $buildSrcset("jpg");
+
+    $alt = htmlspecialchars(
+        (string)
+        $article_data["img_alt"] ?? ($article_data["title"] ?? ""),
+    );
+    $title = htmlspecialchars((string)$article_data["title"] ?? "");
+
+    // Что увидит браузер, который не знает про srcset (совсем старый)
+    $fallback_src = "{$dir}/{$name}-650w.jpg";
+
+    $html = "<picture>
+         <source srcset=\"{$avif_srcset}\" type=\"image/avif\" sizes=\"{$sizes_attr}\">
+         <source srcset=\"{$webp_srcset}\" type=\"image/webp\" sizes=\"{$sizes_attr}\">
+         <img src=\"{$fallback_src}\"
+              srcset=\"{$jpg_srcset}\"
+              sizes=\"{$sizes_attr}\"
+              alt=\"{$alt}\"
+              title=\"{$title}\"
+              width=\"{$def_w}\"
+              height=\"{$def_h}\"
+              loading=\"{$loading}\"
+              fetchpriority=\"{$priority}\">
+     </picture>";
+
+    return $link_url
+        ? "<a href=\"" . htmlspecialchars((string)$link_url) . "\">{$html}</a>"
+        : $html;
+}
